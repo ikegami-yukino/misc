@@ -37,17 +37,17 @@ class FTRLProximal:
             self.w[cls][f] = 0
 
     def train(self, x):
-        data_order = range(len(x))
-        for t in xrange(self.loop):
+        data_order = list(range(len(x)))
+        for t in range(self.loop):
             np.random.shuffle(data_order)
             for d in data_order:
                 feature = x[d][1:]
                 t = x[d][0]
-                for cls in xrange(self.k):
+                for cls in range(self.k):
                     pred_result = self.predict(feature, self.w[cls])
                     glad = (pred_result - int(t == cls)) * feature
                     self.g_square_sum[cls] += glad**2
-                    for i in xrange(self.n):
+                    for i in range(self.n):
                         self.eta[cls][i] = self.alpha / (self.beta + np.sqrt(self.g_square_sum[cls][i]))
                         learning_rate = (1.0 / self.eta[cls][i]) - (1.0 / self.prev_eta[cls][i])
                         self.z[cls][i] += glad[i] - learning_rate * self.w[cls][i]
@@ -70,9 +70,9 @@ if __name__ == '__main__':
     k = 3
     ftrlp = FTRLProximal(k, 5, i=200, alpha=0.9)
     ftrlp.train(X)
-    print ftrlp.w
-    print ftrlp.z
-    print [ftrlp.predict(np.array((1, 0, 0, 0, 1)), ftrlp.w[j]) for j in xrange(k)]
-    print [ftrlp.predict(np.array((0, 1, 0, 0, 1)), ftrlp.w[j]) for j in xrange(k)]
-    print [ftrlp.predict(np.array((0, 0, 1, 0, 1)), ftrlp.w[j]) for j in xrange(k)]
-    print [ftrlp.predict(np.array((2, 1, 1, 0, 1)), ftrlp.w[j]) for j in xrange(k)]
+    print(ftrlp.w)
+    print(ftrlp.z)
+    print([ftrlp.predict(np.array((1, 0, 0, 0, 1)), ftrlp.w[j]) for j in range(k)])
+    print([ftrlp.predict(np.array((0, 1, 0, 0, 1)), ftrlp.w[j]) for j in range(k)])
+    print([ftrlp.predict(np.array((0, 0, 1, 0, 1)), ftrlp.w[j]) for j in range(k)])
+    print([ftrlp.predict(np.array((2, 1, 1, 0, 1)), ftrlp.w[j]) for j in range(k)])
