@@ -79,12 +79,14 @@ class BbitMinHash(object):
             return numerator / denominator
 
         lhs_r = len(lhs_minhash) / self.d
-        lhs_A = compute_A(lhs_r)
         rhs_r = len(rhs_minhash) / self.d
-        rhs_A = compute_A(rhs_r)
         both_r = lhs_r + rhs_r
         lhs_r_ratio = lhs_r / both_r
         rhs_r_ratio = rhs_r / both_r
+
+        lhs_A = compute_A(lhs_r)
+        rhs_A = compute_A(rhs_r)
+
         C1 = lhs_A * rhs_r_ratio + rhs_A * lhs_r_ratio
         C2 = lhs_A * lhs_r_ratio + rhs_A * rhs_r_ratio
 
