@@ -17,7 +17,7 @@ class FTRLProximal:
         self.LAMBDA_ONE = 0.2
         self.alpha = alpha
         self.beta = beta
-        self.gain = 1
+        self.gain = 2
 
         self.w = np.zeros((k, n), dtype=np.float16)
         self.prev_eta = self.eta = np.ones((k, n), dtype=np.float16)
