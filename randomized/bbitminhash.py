@@ -26,6 +26,7 @@ class BbitMinHash(object):
         self.num_hashes = k
         self.d = d
         self.dtype = self._determine_dtype(b)
+        self.doc_to_hash = np.vectorize(lambda word, seed: mmh3.hash(word, seed))
 
     def _determine_dtype(self, b):
         """Determine datatype representing b-Bit MinHash
@@ -54,15 +55,13 @@ class BbitMinHash(object):
             <numpy.array> bits
         """
         bits = np.zeros(self.num_hashes, dtype=self.dtype)
-        doc_to_hash = np.vectorize(lambda word, seed: mmh3.hash(word, seed))
         for (i, seed) in enumerate(self.seeds):
-            hash_vals = doc_to_hash(doc, seed)
-            min_hash = np.min(hash_vals)
-            try:
-                b_bit_min_hash = int(bin(min_hash)[-self.b:], 2)
-            except ValueError:
-                b_bit_min_hash = int(bin(min_hash), 2)
-            bits[i] = b_bit_min_hash
+            hashes = self.doc_to_hash(doc, seed)
+            min_hash = np.min(hashes)
+            b_bit_min_hash = bin(min_hash)[-self.b:]
+            if b_bit_min_hash[0] == 'b':
+                b_bit_min_hash = b_bit_min_hash[1:]
+            bits[i] = int(b_bit_min_hash, 2)
         return bits
 
     def compute_similarity(self, lhs_minhash, rhs_minhash):
@@ -80,6 +79,7 @@ class BbitMinHash(object):
 
         lhs_r = len(lhs_minhash) / self.d
         rhs_r = len(rhs_minhash) / self.d
+
         both_r = lhs_r + rhs_r
         lhs_r_ratio = lhs_r / both_r
         rhs_r_ratio = rhs_r / both_r
