@@ -60,16 +60,17 @@ if __name__ == '__main__':
     X = np.array(
         (
             (0, 1, 0, 0, 0, 1),
-            (0, 1, 0, 0, 0, 1),
+            (0, 1, 1, 0, 0, 1),
             (1, 0, 1, 0, 0, 1),
-            (1, 1, 1, 0, 0, 1),
+            (1, 0, 1, 1, 0, 1),
             (2, 0, 0, 1, 0, 1),
-            (2, 0, 1, 1, 1, 1),
+            (2, 0, 0, 1, 1, 1),
+            (3, 0, 0, 0, 0, 1),
         )
     )
 
-    k = 3
-    ftrlp = FTRLProximal(k, 5, i=200, alpha=0.9)
+    k = 4
+    ftrlp = FTRLProximal(k, 5, i=1000, alpha=0.9)
     ftrlp.train(X)
     print('WEIGHT:')
     print(ftrlp.w)
@@ -80,3 +81,4 @@ if __name__ == '__main__':
     print([ftrlp.predict(np.array((0, 1, 0, 0, 1)), ftrlp.w[j]) for j in range(k)])
     print([ftrlp.predict(np.array((0, 0, 1, 0, 1)), ftrlp.w[j]) for j in range(k)])
     print([ftrlp.predict(np.array((0, 0, 0, 1, 1)), ftrlp.w[j]) for j in range(k)])
+    print([ftrlp.predict(np.array((1, 1, 1, 1, 1)), ftrlp.w[j]) for j in range(k)])
