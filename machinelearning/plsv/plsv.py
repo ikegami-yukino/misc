@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import logging
 from collections import defaultdict
 import itertools
 import numpy as np
@@ -125,20 +126,18 @@ class PLSV(object):
             self.expectation(corpus)
             self.maximization(corpus)
 
-    def dump(self):
-        print('phi')
-        print(self.phi)
-        print('theta')
-        print(self.theta)
-        print('xai')
-        print(self.xai)
-        print('prob_zpx')
-        print(self.prob_zpx)
-        print('prob_zpnm')
-        print(self.prob_zpnm)
 
 
 if __name__ == '__main__':
+    import sys
+
+    def dump(plsv):
+        print('phi:\n%s' % plsv.phi)
+        print('theta:\n%s' % plsv.theta)
+        print('xai:\n%s' % plsv.xai)
+        print('prob_zpx:\n%s' % plsv.prob_zpx)
+        print('prob_zpnm:\n%s' % plsv.prob_zpnm)
+
     DATA = [
         [0, 1, 2, 3],
         [0, 1, 2, 3],
@@ -148,4 +147,5 @@ if __name__ == '__main__':
     ]
     plsv = PLSV(corpus=DATA)
     plsv.learning(DATA)
-    plsv.dump()
+
+    dump(plsv)
