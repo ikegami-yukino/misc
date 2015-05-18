@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import logging
 from collections import defaultdict
 import itertools
 import numpy as np
@@ -20,8 +19,7 @@ http://www.kecl.ntt.co.jp/as/members/iwata/plsv.pdf
 
 class PLSV(object):
 
-    def __init__(self, corpus, dimension=2, k=3, alpha=0.01,
-                 beta=0.0001, gamma=0.0001, iteration=10, learning_rate=0.1):
+    def __init__(self, corpus, dimension=2, k=3, alpha=0.01, beta=0.0001, gamma=0.0001, learning_rate=0.1):
         """
         Params:
             <list><list> corpus : text dataset
@@ -30,33 +28,31 @@ class PLSV(object):
             <float> alpha : hyper parameter of theta
             <float> beta : hyper parameter of phi
             <float> gamma : hyper parameter of xai
-            <int> iteration : num of learning
             <float> learning_rate
         """
+        self.corpus = corpus
         self.doc_num = len(corpus)
-        self.vocas = self.get_vocabularies(corpus)
-        self.wordsize = len(self.vocas)
+        self.vocas = self.extract_unique_words(corpus)
+        self.num_vocas = len(self.vocas)
 
         self.dimension = dimension
         self.k = k
         self.alpha = alpha
         self.beta = beta
         self.gamma = gamma * k
-        self.iteration = iteration
         self.learning_rate = learning_rate
 
         self.prob_zpx = np.zeros([self.doc_num, self.k])
-        self.prob_zpnm = np.random.dirichlet(np.ones(self.k), (self.doc_num, self.wordsize))
+        self.prob_zpnm = np.random.dirichlet(np.ones(self.k), (self.doc_num, self.num_vocas))
 
         self.phi = np.ones([self.k, self.dimension])
         self.xai = np.zeros([self.doc_num, self.dimension])
-        self.theta = np.random.dirichlet(np.ones(self.wordsize), self.k)
+        self.theta = np.random.dirichlet(np.ones(self.num_vocas), self.k)
 
-    def get_vocabularies(self, corpus):
+    def extract_unique_words(self, corpus):
         vocas = defaultdict(lambda: len(vocas))
-        for doc in corpus:
-            for word in doc:
-                vocas[word]
+        for word in [word for doc in corpus for word in doc]:
+            vocas[word]
         return vocas
 
     def dist(self, doc_id, topic_id):
@@ -64,20 +60,18 @@ class PLSV(object):
         def euclid(a, b):
             return np.linalg.norm(a - b)
 
-        denominator = 0
-        for t in range(self.k):
-            denominator += np.exp(-0.5 * euclid(self.xai[doc_id], self.phi[t]))
+        f = lambda t_id: np.exp(-0.5 * euclid(self.xai[doc_id], self.phi[t_id]))
+        denominator = sum(map(f, range(self.k)))
         numerator = np.exp(-0.5 * euclid(self.xai[doc_id], self.phi[topic_id]))
         return numerator / denominator
 
     def posterior(self, d_id, topic_id, word_id):
-        denominator = 0
-        for t_id in range(self.k):
-            denominator += self.prob_zpx[d_id][t_id] * self.theta[t_id][word_id]
+        f = lambda t_id: self.prob_zpx[d_id][t_id] * self.theta[t_id][word_id]
+        denominator = sum(map(f, range(self.k)))
         numerator = self.prob_zpx[d_id][topic_id] * self.theta[topic_id][word_id]
         return numerator / denominator
 
-    def expectation(self, corpus):
+    def expect(self, corpus):
         for (d_id, t_id) in itertools.product(range(self.doc_num), range(self.k)):
             self.prob_zpx[d_id][t_id] = self.dist(d_id, t_id)
 
@@ -86,7 +80,7 @@ class PLSV(object):
                 w_id = self.vocas[word]
                 self.prob_zpnm[d_id][w_id][t_id] = self.posterior(d_id, t_id, w_id)
 
-    def theta_update(self, corpus, topic_id, word_id):
+    def update_theta(self, corpus, topic_id, word_id):
         numerator = 0
         denominator = 0
         for (doc_id, doc) in enumerate(corpus):
@@ -94,14 +88,14 @@ class PLSV(object):
                 if w_id == word_id:
                     numerator = self.prob_zpnm[doc_id][word_id][topic_id]
                 denominator += self.prob_zpnm[doc_id][word_id][topic_id]
-        return (numerator + self.alpha) / (denominator + self.alpha * self.wordsize)
+        return (numerator + self.alpha) / (denominator + self.alpha * self.num_vocas)
 
-    def xai_update(self, doc_id, topic_id, grad):
+    def update_xai(self, doc_id, topic_id, grad):
         for i in range(self.dimension):
             diff = grad * (self.xai[doc_id][i] - self.phi[topic_id][i]) - self.gamma * self.xai[doc_id][i]
             self.xai[doc_id][i] += self.learning_rate * diff
 
-    def phi_update(self, doc_id, topic_id, grad):
+    def update_phi(self, doc_id, topic_id, grad):
         for i in range(self.dimension):
             diff = grad * (self.phi[topic_id][i] - self.xai[doc_id][i]) - self.beta * self.phi[topic_id][i]
             self.phi[topic_id][i] += self.learning_rate * diff
@@ -113,24 +107,25 @@ class PLSV(object):
                 p_zpx = self.prob_zpx[doc_id][topic_id]
                 p_z = self.prob_zpnm[doc_id][word_id][topic_id]
                 grad = p_zpx - p_z
-                self.xai_update(doc_id, topic_id, grad)
-                self.phi_update(doc_id, topic_id, grad)
+                self.update_xai(doc_id, topic_id, grad)
+                self.update_phi(doc_id, topic_id, grad)
 
-    def maximization(self, corpus):
-        for (t_id, w_id) in itertools.product(range(self.k), range(self.wordsize)):
-            self.theta[t_id][w_id] = self.theta_update(corpus, t_id, w_id)
+    def maximize(self, corpus):
+        for (t_id, w_id) in itertools.product(range(self.k), range(self.num_vocas)):
+            self.theta[t_id][w_id] = self.update_theta(corpus, t_id, w_id)
         self.update(corpus)
 
-    def learning(self, corpus):
-        for i in range(self.iteration):
-            self.expectation(corpus)
-            self.maximization(corpus)
-
+    def learning(self, iteration=10):
+        '''
+        Params:
+            <int> iteration : num of learning
+        '''
+        for i in range(iteration):
+            self.expect(self.corpus)
+            self.maximize(self.corpus)
 
 
 if __name__ == '__main__':
-    import sys
-
     def dump(plsv):
         print('phi:\n%s' % plsv.phi)
         print('theta:\n%s' % plsv.theta)
@@ -146,6 +141,6 @@ if __name__ == '__main__':
         [4, 5, 2, 3]
     ]
     plsv = PLSV(corpus=DATA)
-    plsv.learning(DATA)
+    plsv.learning()
 
     dump(plsv)
