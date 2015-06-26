@@ -49,10 +49,9 @@ class FTRLProximal:
                 self.prev_eta[cls][i] = self.eta[cls][i]
 
     def train(self, x):
-        learning_order = list(range(len(x)))
+        num_data = len(x)
         for i in range(self.loop):
-            np.random.shuffle(learning_order)
-            for j in learning_order:
+            for j in np.random.permutation(num_data):
                 self.train_one(x[j][0], x[j][1:])
 
 
