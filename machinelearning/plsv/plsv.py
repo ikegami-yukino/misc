@@ -61,8 +61,9 @@ class PLSV(object):
             return np.linalg.norm(a - b)
 
         f = lambda t_id: np.exp(-0.5 * euclid(self.xai[doc_id], self.phi[t_id]))
-        denominator = sum(map(f, range(self.k)))
-        numerator = np.exp(-0.5 * euclid(self.xai[doc_id], self.phi[topic_id]))
+        distances = list(map(f, range(self.k)))
+        denominator = sum(distances)
+        numerator = distances[topic_id]
         return numerator / denominator
 
     def posterior(self, d_id, topic_id, word_id):
@@ -91,14 +92,12 @@ class PLSV(object):
         return (numerator + self.alpha) / (denominator + self.alpha * self.num_vocas)
 
     def update_xai(self, doc_id, topic_id, grad):
-        for i in range(self.dimension):
-            diff = grad * (self.xai[doc_id][i] - self.phi[topic_id][i]) - self.gamma * self.xai[doc_id][i]
-            self.xai[doc_id][i] += self.learning_rate * diff
+        diff = grad * (self.xai[doc_id] - self.phi[topic_id]) - self.gamma * self.xai[doc_id]
+        self.xai[doc_id] += self.learning_rate * diff
 
     def update_phi(self, doc_id, topic_id, grad):
-        for i in range(self.dimension):
-            diff = grad * (self.phi[topic_id][i] - self.xai[doc_id][i]) - self.beta * self.phi[topic_id][i]
-            self.phi[topic_id][i] += self.learning_rate * diff
+        diff = grad * (self.phi[topic_id] - self.xai[doc_id]) - self.beta * self.phi[topic_id]
+        self.phi[topic_id] += self.learning_rate * diff
 
     def update(self, corpus):
         for (doc_id, doc) in enumerate(corpus):
