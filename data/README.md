@@ -9,3 +9,7 @@ Nouns are described at left column. Document frequencies are described at right 
 All nouns are extracted by [MeCab](http://taku910.github.io/mecab/) with [mecab-ipadic-neologd](https://github.com/neologd/mecab-ipadic-neologd)
 
 This file contains only 764804 nouns, which appeared more than 500 times. jawiki-20150602-df.csv.bz2 contains all nouns.
+
+## mecab
+
+Script for converting format of mozc's dictionary to one of mecab IPA dic
