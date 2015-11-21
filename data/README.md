@@ -10,6 +10,10 @@ All nouns are extracted by [MeCab](http://taku910.github.io/mecab/) with [mecab-
 
 This file contains only 764804 nouns, which appeared more than 500 times. jawiki-20150602-df.csv.bz2 contains all nouns.
 
+## wikipedia\_synonym.py
+
+Script for generating synonym dictionary JSON from Wikipedia data
+
 ## mecab
 
 Script for converting format of mozc's dictionary to one of mecab IPA dic
