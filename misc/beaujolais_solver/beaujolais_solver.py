@@ -33,7 +33,7 @@ def ranking(d):
         indices[val].append(idx)
     sorted_indices = sorted(indices.items(), reverse=True)
     for (rank, (_, indices)) in enumerate(sorted_indices, start=1):
-        print(rank, indices)
+        print(rank, ', '.join(sorted(indices)))
 
 
 def solve(catch_copies):
