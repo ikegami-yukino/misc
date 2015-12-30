@@ -1,21 +1,23 @@
 # -*- coding: utf-8 -*-
 """
 Wikipediaのリダイレクト一覧からElasticsearchの類義語辞書を生成
-(Python 3.X用)
 
 e.g.
 ベイクドチーズケーキ,CHEESE CAKE,チーズケーキ,焼きたてチーズケーキ,レアチーズケーキ
 ターンバック,ターン・バック
 黒崎バイパス,黒崎道路
 """
+from __future__ import unicode_literals
+import codecs
 from collections import defaultdict
 import gzip
 import os
 import re
 try:
     import urllib.request as urllib
-except:
+except:  # for Python 2.X
     import urllib
+    chr = unichr
 
 re_parentheses = re.compile("\((\d+),\d+,'?([^,']+)'?,[^\)]+\)")
 re_title_brackets = re.compile('_\([^\)]+\)$')
@@ -75,7 +77,7 @@ def extract_redirects(id2title, path):
 
 def write(synonyms, path):
     print('write: %s' % path)
-    with open(path, 'w') as fd:
+    with codecs.open(path, 'w', encoding='utf8') as fd:
         for (word, words) in synonyms.items():
             words.add(word)
             fd.write('%s\n' % (','.join(words)))
