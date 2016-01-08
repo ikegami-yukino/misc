@@ -4,7 +4,7 @@ import re
 re_parenthesis = re.compile('\([^)]+\)')
 
 
-def dt2code(tree, feature_names, class_names):
+def dt2code(tree, feature_names, class_names, func_name='f'):
     '''
     Converting scikit-learn's DecisionTreeClassifier to Python code
 
@@ -12,6 +12,7 @@ def dt2code(tree, feature_names, class_names):
         <sklearn.tree.DecisionTreeClassifier> tree
         <list> feature_names
         <list> class_names
+        <str> func_name
     Return:
         <str> code
     '''
@@ -43,7 +44,7 @@ def dt2code(tree, feature_names, class_names):
             output += "%sreturn %d  # samples=%s\n" % (' ' * indent, class_idx, n_node_samples[node])
         return output
 
-    code = 'def f(%s=0):\n' % ('=0, '.join(feature_names))
+    code = 'def %s(%s=0):\n' % (func_name, '=0, '.join(feature_names))
     code += '    """\n'
     code += ''.join(['    %d -> %s\n' % (i, x) for (i, x) in enumerate(class_names)])
     code += '    """\n'
