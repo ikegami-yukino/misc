@@ -8,7 +8,7 @@ class MorrisSqlite(object):
     def __init__(self, path, radix=2):
         self.path = path
         if not os.path.exists(path):
-            self._send_sql('create table word_df (word text unique, df integer)')
+            self._send_sql('CREATE TABLE word_df (word text unique, df integer)')
         self.radix = radix
         self.max_exponent = 255        # maximum of unsigned char
 
@@ -25,7 +25,7 @@ class MorrisSqlite(object):
         try:
             conn = sqlite3.connect(self.path)
             c = conn.cursor()
-            for row in c.execute('select df from word_df where word="%s"' % word):
+            for row in c.execute('SELECT df FROM word_df WHERE word="%s"' % word):
                 exponent = row[0]
                 break
         finally:
@@ -53,6 +53,6 @@ class MorrisSqlite(object):
     def get_all(self):
         conn = sqlite3.connect(self.path)
         c = conn.cursor()
-        for row in c.execute('select * from word_df'):
+        for row in c.execute('SELECT * FROM word_df ORDER BY df DESC'):
             print(row)
         c.close()
