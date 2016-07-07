@@ -4,7 +4,7 @@ import argparse
 import glob
 import os
 import re
-import jctconv
+import jaconv
 
 re_asterisks = re.compile('[,\*]+$')
 
@@ -42,7 +42,7 @@ def convert(mozc_map, mozc_dir, output_dir):
                     if lid not in mozc_map:
                         continue
                     (new_id, pos) = mozc_map[lid]
-                    yomi = jctconv.hira2kata(yomi)
+                    yomi = jaconv.hira2kata(yomi)
                     line = ','.join([surface, new_id, new_id, '0', pos, surface, yomi, yomi])
                     line += '\n'
                     out_fd.write(line.encode('utf8', 'replace'))
