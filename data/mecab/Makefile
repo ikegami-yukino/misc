@@ -12,5 +12,5 @@ all:
 	@if [ ! -d $(OUTPUTDIR) ]; \
       then mkdir $(OUTPUTDIR); \
     fi
-	pip install jctconv
+	pip install jaconv
 	python mozc2ipadic.py --mozc $(MOZCDIR) --ipadic $(MECABDIR)/mecab-ipadic --out $(OUTPUTDIR)
