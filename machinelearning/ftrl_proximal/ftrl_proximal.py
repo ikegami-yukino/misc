@@ -13,46 +13,45 @@ class FTRLProximal:
     http://static.googleusercontent.com/media/research.google.com/ja//pubs/archive/41159.pdf
     """
 
-    def __init__(self, k, n, i=10, alpha=0.01, beta=1.0):
+    def __init__(self, k, n, i=10, alpha=0.01, beta=1.0, l1=1.0, l2=1.0):
         self.k = k  # num of classes
         self.n = n  # num of features
         self.loop = i
-        self.l1 = 1.0
-        self.alpha = alpha
-        self.beta = beta
+        self.l1 = l1
+        self.l2 = l2
+        self.a = alpha
+        self.b = beta
 
         self.bias = np.random.rand(k)
-        self.w = np.zeros((k, n), dtype=np.float16)
-        self.prev_eta = self.eta = np.ones((k, n), dtype=np.float16)
-        self.z = np.zeros((k, n), dtype=np.float16)
-        self.grad_square_sum = np.zeros((k, n), dtype=np.float16)  # Σ glad**2
+        self.w = np.zeros((k, n), dtype=np.float64)
+        self.c = np.zeros((k, n), dtype=np.float64)
+        self.z = np.zeros((k, n), dtype=np.float64)
 
     def predict(self, x):
         def softmax(x):
             e_x = np.exp(x - np.max(x))
             return e_x / e_x.sum()
-        return softmax(np.dot(self.w, x) + self.bias)
 
-    def _update_weight(self):
-        self.w[np.where(self.z <= self.l1)] = 0
-        indices = np.where(self.z > self.l1)
-        self.w[indices] += self.eta[indices] * (self.z[indices] - (np.sign(self.z[indices]) * self.l1))
+        sign = np.ones_like(self.w)
+        sign[np.where(self.w < 0)] = -1
+        self.z[np.where(sign * self.w <= self.l1)] = 0
+        i = np.where(sign * self.w > self.l1)
+        self.z[i] = (sign[i] * self.l1 - self.w[i]) / \
+                        ((self.b + np.sqrt(self.c[i])) / self.a + self.l2)
+        return softmax(np.dot(self.z, x) + self.bias)
 
     def train_one(self, feature, y):
-        t = np.zeros((self.k, self.n))
-        t[y] = feature
-
         pred_result = self.predict(feature)
 
         self.bias -= np.mean(pred_result, axis=0)
 
-        weight_grad = t - pred_result[:, np.newaxis]
-        self.grad_square_sum += weight_grad**2
-        self.eta = self.alpha / (self.beta + np.sqrt(self.grad_square_sum))
-        learning_rate = (1. / self.eta) - (1. / self.prev_eta)
-        self.z += weight_grad - learning_rate * self.w
-        self._update_weight()
-        self.prev_eta = self.eta
+        t = np.zeros((self.k, self.n))
+        t[y] = feature
+        e = pred_result[:, np.newaxis] - t
+        e2 = e**2
+        s = (np.sqrt(self.c + e2) - np.sqrt(self.c)) / self.a
+        self.w += e - s * self.z
+        self.c += e2
 
     def fit(self, X, y):
         num_data = len(X)
@@ -75,7 +74,7 @@ if __name__ == '__main__':
     y = np.array((0, 0, 1, 1, 2, 2))
 
     k = 3
-    ftrlp = FTRLProximal(k, 4, i=1000, alpha=0.01)
+    ftrlp = FTRLProximal(k, 4, i=100, alpha=0.01)
     ftrlp.fit(X, y)
     print('WEIGHT:')
     print(ftrlp.w)
