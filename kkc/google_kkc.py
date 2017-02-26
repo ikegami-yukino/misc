@@ -6,6 +6,7 @@ try:
     from urllib.parse import urlencode
 except ImportError:
     from urllib import urlopen, urlencode
+    input = raw_input
 
 
 URL = 'http://www.google.com/transliterate'
@@ -26,14 +27,18 @@ def _request(text):
     return urlopen(url)
 
 
-def convert(text):
-    return json.load(_request(text))
+def _convert(text):
+    r = _request(text).read()
+    if hasattr(r, 'decode'):
+        r = r.decode('utf8')
+    return json.loads(r)
 
 
 def get_best_answer(text):
-    bests = [converted[0] for (raw, converted) in convert(text)]
+    bests = [candidates[0] for (raw, candidates) in _convert(text)]
     return ''.join(bests)
+
 
 if __name__ == '__main__':
     while True:
-        print(get_best_answer(raw_input('> ')))
+        print(get_best_answer(input('> ')))
