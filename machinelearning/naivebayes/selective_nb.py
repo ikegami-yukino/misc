@@ -6,8 +6,11 @@ from sklearn.utils import check_X_y, check_array
 from sklearn.utils.extmath import safe_sparse_dot
 from sklearn.utils.validation import check_is_fitted
 
+_ALPHA_MIN = 1e-10
 
-class UniversalSetNB(MultinomialNB):
+
+class SelectiveNB(MultinomialNB):
+
     complement_class_prior = None
 
     def _count(self, X, Y):
@@ -57,18 +60,34 @@ class UniversalSetNB(MultinomialNB):
         else:
             self.complement_class_log_prior_ = np.zeros(n_classes) - np.log(n_classes)
 
-    def _joint_log_likelihood(self, X):
+    def complement_joint_log_likelihood(self, X):
         """Calculate the posterior log probability of the samples X
-        P(c) / P(¬c) * (Π(P(w_i | c) / ΠP(w_i | ¬c)))"""
+        1 - (|c| - 1) * ((P(¬c)ΠP(w_i|¬c)) / (ΣP(¬c)ΠP(w_i|¬c)))"""
         check_is_fitted(self, "classes_")
 
         X = check_array(X, accept_sparse='csr')
+        return (1 - (len(self.classes_) - 1)) * np.array(safe_sparse_dot(X, self.complement_feature_log_prob_.T) -
+                        np.sum(self.class_log_prior_ + safe_sparse_dot(X, self.complement_feature_log_prob_.T)))
 
-        features_doc_logprob = safe_sparse_dot(X, self.feature_log_prob_.T)
-        numerator = features_doc_logprob + self.class_log_prior_
+    def _joint_log_likelihood(self, X):
+        """Calculate the posterior log probability of the samples X
+        P(c) * Π P(w_i|c) / ΣP(c) * Π P(w_i|c)"""
+        check_is_fitted(self, "classes_")
 
-        denominator = safe_sparse_dot(X, self.complement_feature_log_prob_.T) + self.complement_class_log_prior_
+        X = check_array(X, accept_sparse='csr')
+        numerator = self.class_log_prior_ + safe_sparse_dot(X, self.feature_log_prob_.T)
+        denominator = np.sum(self.class_log_prior_ + safe_sparse_dot(X, self.feature_log_prob_.T))
         return np.array(numerator - denominator)
+
+    def _check_alpha(self):
+        if self.alpha < 0:
+            raise ValueError('Smoothing parameter alpha = %.1e. '
+                             'alpha should be > 0.' % self.alpha)
+        if self.alpha < _ALPHA_MIN:
+            warnings.warn('alpha too small will result in numeric errors, '
+                          'setting alpha = %.1e' % _ALPHA_MIN)
+            return _ALPHA_MIN
+        return self.alpha
 
     def partial_fit(self, X, y, classes=None, sample_weight=None):
         """Incremental fit on a batch of samples.
@@ -196,3 +215,10 @@ class UniversalSetNB(MultinomialNB):
         self._update_feature_log_prob(alpha)
         self._update_class_log_prior(class_prior=class_prior)
         return self
+
+    def predict(self, X):
+        if np.max(np.exp(self.class_log_prior_)) >= 0.5:
+            jll = self._joint_log_likelihood(X)
+            return self.classes_[np.argmax(jll, axis=1)]
+        jll = self.complement_joint_log_likelihood(X)
+        return self.classes_[np.argmax(jll, axis=1)]
