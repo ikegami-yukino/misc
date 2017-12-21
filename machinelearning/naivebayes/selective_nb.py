@@ -6,8 +6,6 @@ from sklearn.utils import check_X_y, check_array
 from sklearn.utils.extmath import safe_sparse_dot
 from sklearn.utils.validation import check_is_fitted
 
-_ALPHA_MIN = 1e-10
-
 
 class SelectiveNB(MultinomialNB):
 
@@ -78,16 +76,6 @@ class SelectiveNB(MultinomialNB):
         numerator = self.class_log_prior_ + safe_sparse_dot(X, self.feature_log_prob_.T)
         denominator = np.sum(self.class_log_prior_ + safe_sparse_dot(X, self.feature_log_prob_.T))
         return np.array(numerator - denominator)
-
-    def _check_alpha(self):
-        if self.alpha < 0:
-            raise ValueError('Smoothing parameter alpha = %.1e. '
-                             'alpha should be > 0.' % self.alpha)
-        if self.alpha < _ALPHA_MIN:
-            warnings.warn('alpha too small will result in numeric errors, '
-                          'setting alpha = %.1e' % _ALPHA_MIN)
-            return _ALPHA_MIN
-        return self.alpha
 
     def partial_fit(self, X, y, classes=None, sample_weight=None):
         """Incremental fit on a batch of samples.
