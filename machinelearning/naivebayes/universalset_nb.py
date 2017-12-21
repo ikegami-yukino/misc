@@ -1,9 +1,10 @@
 import numpy as np
 from scipy.sparse import issparse
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.preprocessing import LabelBinarizer
+from sklearn.preprocessing import LabelBinarizer, label_binarize
 from sklearn.utils import check_X_y, check_array
 from sklearn.utils.extmath import safe_sparse_dot
+from sklearn.utils.multiclass import _check_partial_fit_first_call
 from sklearn.utils.validation import check_is_fitted
 
 
