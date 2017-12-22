@@ -59,23 +59,23 @@ class SelectiveNB(MultinomialNB):
         else:
             self.complement_class_log_prior_ = np.zeros(n_classes) - np.log(n_classes)
 
-    def complement_joint_log_likelihood(self, X):
+    def complement_joint_log_likelihood(self, X, i):
         """Calculate the posterior log probability of the samples X
         1 - (|c| - 1) * ((P(¬c)ΠP(w_i|¬c)) / (ΣP(¬c)ΠP(w_i|¬c)))"""
         check_is_fitted(self, "classes_")
 
         X = check_array(X, accept_sparse='csr')
         return (1 - (len(self.classes_) - 1)) * np.array(safe_sparse_dot(X, self.complement_feature_log_prob_.T) -
-                        np.sum(self.class_log_prior_ + safe_sparse_dot(X, self.complement_feature_log_prob_.T)))
+                        np.sum(self.class_log_prior_[i] + safe_sparse_dot(X, self.complement_feature_log_prob_.T)))
 
-    def _joint_log_likelihood(self, X):
+    def _joint_log_likelihood(self, X, i):
         """Calculate the posterior log probability of the samples X
         P(c) * Π P(w_i|c) / ΣP(c) * Π P(w_i|c)"""
         check_is_fitted(self, "classes_")
 
         X = check_array(X, accept_sparse='csr')
-        numerator = self.class_log_prior_ + safe_sparse_dot(X, self.feature_log_prob_.T)
-        denominator = np.sum(self.class_log_prior_ + safe_sparse_dot(X, self.feature_log_prob_.T))
+        numerator = self.class_log_prior_[i] + safe_sparse_dot(X, self.feature_log_prob_.T)
+        denominator = np.sum(self.class_log_prior_[i] + safe_sparse_dot(X, self.feature_log_prob_.T))
         return np.array(numerator - denominator)
 
     def partial_fit(self, X, y, classes=None, sample_weight=None):
@@ -206,8 +206,13 @@ class SelectiveNB(MultinomialNB):
         return self
 
     def predict(self, X):
-        if np.max(np.exp(self.class_log_prior_)) >= 0.5:
-            jll = self._joint_log_likelihood(X)
-            return self.classes_[np.argmax(jll, axis=1)]
-        jll = self.complement_joint_log_likelihood(X)
-        return self.classes_[np.argmax(jll, axis=1)]
+        jlls = []
+        for i in range(len(self.class_log_prior_)):
+            if np.exp(self.class_log_prior_[i]) > 0.5:
+                jll = self._joint_log_likelihood(X, i)
+                jlls.append(jll)
+            else:
+                jll = self.complement_joint_log_likelihood(X, i)
+                jlls.append(jll)
+        jlls = np.array(jlls)[0]
+        return self.classes_[np.argmax(jlls, axis=1)]
