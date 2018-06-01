@@ -14,6 +14,9 @@ N_FEATURES = 50000
 MAX_LEN = 140
 BATCH = 20
 EPOCH = 3
+EMBEDDING_OUT_DIM = 256
+LSTM_UNITS = 128
+DROPOUT_RATE = 0.5
 
 
 def vectorize(path, label):
@@ -39,13 +42,13 @@ if __name__ == '__main__':
     X_test = sequence.pad_sequences(X_test, maxlen=MAX_LEN)
 
     model = Sequential()
-    model.add(Embedding(N_FEATURES, 256, input_length=MAX_LEN))
-    model.add(LSTM(128))
-    model.add(Dropout(0.5))
+    model.add(Embedding(N_FEATURES, EMBEDDING_OUT_DIM, input_length=MAX_LEN))
+    model.add(LSTM(LSTM_UNITS))
+    model.add(Dropout(DROPOUT_RATE))
     model.add(Dense(1))
     model.add(Activation('sigmoid'))
     model.compile(loss='binary_crossentropy', optimizer='adam',
-                  class_mode="binary", metrics=["accuracy"])
+                  class_mode='binary', metrics=['accuracy'])
     model.fit(X_train, y_train, batch_size=BATCH, nb_epoch=EPOCH,
               validation_data=(X_test, y_test))
     model.evaluate(X_test, y_test, batch_size=BATCH)
