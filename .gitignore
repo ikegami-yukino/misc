@@ -2,3 +2,5 @@
 *.un~
 *.pyc
 */*/*.vagrant/*
+*.hdf5
+*.pkl
