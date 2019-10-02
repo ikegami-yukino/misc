@@ -1,62 +1,63 @@
 #!/usr/bin/env python
 import argparse
-import multiprocessing
+from itertools import chain
 import math
 import os
 
 import numpy as np
-
-import joblib
-from keras import backend as K
-from keras.layers import LSTM, Dense, Dropout, Embedding
-from keras.losses import categorical_crossentropy
-from keras.models import Sequential
-from keras.optimizers import Adam, Adamax, Nadam
-from keras.preprocessing.sequence import pad_sequences
-from keras.preprocessing.text import Tokenizer
-from keras.utils import Sequence, to_categorical
+from tensorflow.keras import backend as K
+from tensorflow.keras.layers import LSTM, Dense, Embedding
+from tensorflow.keras.losses import categorical_crossentropy
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.optimizers import Adam, Adamax, Nadam
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.utils import Sequence, to_categorical
 
 
 class DataGenerator(Sequence):
-    def __init__(self, data_path, batch_size, max_length, vocab_size):
+    def __init__(self, data_path, batch_size, max_length, vocab_size, tokenizer):
         self.data_path = data_path
         self.batch_size = batch_size
-        with open(self.data_path) as fd:
+        with open(self.data_path, encoding='utf8') as fd:
             self.data = fd.read().splitlines()
-        self.length = int(np.ceil(len(self.data) / self.batch_size))
+        self.data_length = len(self.data)
+        self.offsets = [i * self.data_length // batch_size for i in range(batch_size)]
+        self.length = int(np.ceil(self.data_length / self.batch_size))
         self.max_length = max_length
         self.vocab_size = vocab_size
+        self.tokenizer = tokenizer
+        self.iteration = 0
 
     def __len__(self):
         return self.length
 
     def __getitem__(self, idx):
-        flatten = lambda x: [z for y in x for z in ((y,) if isinstance(y, (str, int)) else flatten(y,))]
+        words = self.get_words()
+        self.iteration += 1
 
-        batch_x = self.data[idx * self.batch_size:(idx + 1) * self.batch_size]
-        sequences = []
-        encoded = tokenizer.texts_to_sequences(batch_x)
-        sequence = [encoded[:i + 1] for i in range(1, len(encoded))]
-        sequence = flatten(sequence)
-        sequences.append(sequence)
-
-        sequences = pad_sequences(sequences, maxlen=self.max_length, padding='pre')
+        encoded = self.tokenizer.texts_to_sequences(words)
+        sequences = pad_sequences(encoded, maxlen=self.max_length, padding='pre')
 
         # split into input and output elements
-        sequences = np.array(sequences)
-
-        X, y = sequences[:, :-1], sequences[:, -1]
+        X, y = sequences[:, :-1], sequences[:, 1:]
         y = to_categorical(y, num_classes=self.vocab_size)
         return X, y
 
+    def get_words(self):
+        return [self.data[(offset + self.iteration) % self.data_length]
+                for offset in self.offsets]
 
-def tokenaize(train_path, dev_path):
-    with open(train_path) as fd:
-        data = fd.read()
-    with open(dev_path) as fd:
-        data += fd.read()
-    tokenizer = Tokenizer(split='\t', oov_token='<UNK>')
-    tokenizer.fit_on_texts([data])
+
+def read_lines(path):
+    with open(path, encoding='utf8') as fd:
+        for line in fd:
+            yield line.rstrip()
+
+
+def tokenize(train_path, dev_path, delimiter):
+    tokenizer = Tokenizer(split=delimiter, oov_token='<UNK>')
+    tokenizer.fit_on_texts(chain(read_lines(train_path), read_lines(dev_path)))
     return tokenizer
 
 
@@ -70,8 +71,8 @@ def select_optimizer(optimizer):
     raise ValueError
 
 
-def calc_data_size(train_path):
-    return sum([1 for f in open(train_path).read()])
+def calc_data_size(path):
+    return sum([1 for f in open(path, encoding='utf8').read()])
 
 
 def perplexity(y_true, y_pred):
@@ -100,32 +101,37 @@ if __name__ == '__main__':
                         help='Number of sentence length')
     parser.add_argument('--batch', '-b', type=int, default=64,
                         help='Batch size')
-    parser.add_argument('--optimizer', type=str,
-                        default='nadam',
+    parser.add_argument('--optimizer', type=str, default='nadam',
                         help='Optimizer function [adam, adamax, nadam]')
     parser.add_argument('--clipnorm', type=float, default=5.0,
                         help='A maximum norm')
+    parser.add_argument('--delimiter', type=str, default='\t',
+                        help='delimiter in input file')
     args = parser.parse_args()
 
-    tokenizer = tokenaize(args.train_path, args.dev_path)
-    joblib.dump(tokenizer, os.path.join(args.out, 'tokenizer.pkl'), compress=True)
+    tokenizer = tokenize(args.train_path, args.dev_path, args.delimiter)
+    open(os.path.join(args.out, 'tokenizer.json'), 'w').write(tokenizer.to_json())
     vocab_size = len(tokenizer.word_index) + 1
 
     # define model
     model = Sequential()
     model.add(Embedding(vocab_size, args.embedding,
                         input_length=args.length - 1))
-    model.add(LSTM(args.unit, dropout=args.dropout))
+    model.add(LSTM(args.unit, input_shape=(args.length - 1, args.embedding),
+                   dropout=args.dropout, return_sequences=True))
     model.add(Dense(vocab_size, activation='softmax'))
 
     optimizer = select_optimizer(args.optimizer.lower())
     model.compile(loss='categorical_crossentropy',
                   optimizer=optimizer(clipnorm=args.clipnorm),
                   metrics=[perplexity])
+    model.summary()
 
     # fit network
-    train_generator = DataGenerator(args.train_path, args.batch, args.length, vocab_size)
-    valid_generator = DataGenerator(args.dev_path, args.batch, args.length, vocab_size)
+    train_generator = DataGenerator(args.train_path, args.batch, args.length,
+                                    vocab_size, tokenizer)
+    valid_generator = DataGenerator(args.dev_path, args.batch, args.length,
+                                    vocab_size, tokenizer)
 
     train_data_size = calc_data_size(args.train_path)
     dev_data_size = calc_data_size(args.dev_path)

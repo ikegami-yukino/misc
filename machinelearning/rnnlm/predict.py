@@ -1,36 +1,44 @@
 #!/usr/bin/env python
 import argparse
 import os
+import sys
 
 import MeCab
+import numpy as np
 
-import joblib
-from keras.models import model_from_yaml
-from keras.preprocessing.sequence import pad_sequences
-
-
-def load_model(model_dir):
-    model = model_from_yaml(open(os.path.join(model_dir, 'rnnlm.yaml')).read())
-    model.load_weights(os.path.join(model_dir, 'rnnlm.hdf5'))
-    return model
+from tensorflow.keras.models import model_from_yaml
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from keras.preprocessing.text import tokenizer_from_json
 
 
-def load_tokenizer(model_dir):
-    tokenizer = joblib.load(os.path.join(model_dir, 'tokenizer.pkl'))
-    index_to_word = {index: word for word, index in tokenizer.word_index.items()}
-    return tokenizer, index_to_word
+class NextWordPredictor(object):
+    def __init__(self, model_dir):
+        self.model = self._load_model(model_dir)
+        self.tokenizer = self._load_tokenizer(model_dir)
 
+    @staticmethod
+    def _load_model(model_dir):
+        model = model_from_yaml(open(os.path.join(model_dir, 'rnnlm.yaml')).read())
+        model.load_weights(os.path.join(model_dir, 'rnnlm.hdf5'))
+        return model
 
-def predict(tagger, words, tokenizer, length, model, index_to_word):
-    # tokenize
-    words = tagger.parse(words).rstrip().split('\t')
-    # encode the text as integer
-    encoded = tokenizer.texts_to_sequences(words)
-    # pre-pad sequences to a fixed length
-    encoded = pad_sequences(encoded, maxlen=length-1, padding='pre')
-    # predict probabilities for each word
-    proba = model.predict_proba(encoded)
-    return [index_to_word.get(idx, '<UNK>') for idx in proba[0].argsort()[-10:][::-1]]
+    @staticmethod
+    def _load_tokenizer(model_dir):
+        tokenizer = tokenizer_from_json(open(os.path.join(model_dir, 'tokenizer.json')).read())
+        return tokenizer
+
+    def predict(self, line, length=20, mecab_args=''):
+        # tokenize
+        tagger = MeCab.Tagger("-F %m\\t --eos-format=\n " + mecab_args)
+        tagger.parse('')  # For avoiding bug
+        words = tagger.parse(line).rstrip().split('\t')
+        # encode the text as integer
+        encoded = self.tokenizer.texts_to_sequences([' '.join(words)])
+        # pre-pad sequences to a fixed length
+        encoded = pad_sequences(encoded, maxlen=length-1, padding='pre')
+        # predict probabilities for each word
+        proba = self.model.predict_proba(encoded)
+        return self.tokenizer.sequences_to_texts([(-proba)[0][-1].argsort()[:20]])[0].split()
 
 
 if __name__ == '__main__':
@@ -41,13 +49,9 @@ if __name__ == '__main__':
                         help='Arguments of MeCab tokenizer')
     parser.add_argument('--length', type=int, default=20,
                         help='Number of sentence length')
+    parser.add_argument('--input_file', type=argparse.FileType('r'), default=sys.stdin)
     args = parser.parse_args()
 
-    model = load_model(args.model_dir)
-    tokenizer, index_to_word = load_tokenizer(args.model_dir)
-    tagger = MeCab.Tagger('-F "%m\t" --eos-format="\n" ' + args.mecab_args)
-    tagger.parse('')  # For avoiding bug
-
-    while True:
-        words = input('> ')
-        print(predict(tagger, words, tokenizer, args.length, model, index_to_word))
+    predictor = NextWordPredictor(args.model_dir)
+    for line in args.input_file:
+        print(predictor.predict(line, args.length, args.mecab_args))
