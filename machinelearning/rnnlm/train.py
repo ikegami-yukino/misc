@@ -15,13 +15,41 @@ from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.utils import Sequence, to_categorical
 
 
+def read_lines(path):
+    with open(path, encoding='utf8') as fd:
+        for line in fd:
+            yield line.rstrip()
+
+
+def convert(data_path, delimiter, batch_size, tokenizer, max_length, save_path):
+    sequences = None
+    words = []
+    for (i, line) in enumerate(read_lines(data_path), start=1):
+        words.append(line.split(delimiter))
+        if i % batch_size == 0:
+            encoded = tokenizer.texts_to_sequences(words)
+            if sequences is None:
+                sequences = pad_sequences(encoded, maxlen=max_length, padding='pre')
+            else:
+                s = pad_sequences(encoded, maxlen=max_length, padding='pre')
+                sequences = np.vstack((sequences, s))
+            words = []
+    encoded = tokenizer.texts_to_sequences(words)
+    s = pad_sequences(encoded, maxlen=max_length, padding='pre')
+    if sequences is None:
+        sequences = s
+    else:
+        sequences = np.vstack((sequences, s))
+    np.savez_compressed(save_path, x=sequences)
+    return sequences
+
+
 class DataGenerator(Sequence):
-    def __init__(self, data_path, batch_size, max_length, vocab_size, tokenizer):
-        self.data_path = data_path
+    def __init__(self, data, batch_size, max_length, vocab_size, tokenizer):
+        self.data = data
         self.batch_size = batch_size
-        with open(self.data_path, encoding='utf8') as fd:
-            self.data = fd.read().splitlines()
-        self.data_length = len(self.data)
+        self.data = data
+        self.data_length = self.data.shape[0]
         self.offsets = [i * self.data_length // batch_size for i in range(batch_size)]
         self.length = int(np.ceil(self.data_length / self.batch_size))
         self.max_length = max_length
@@ -32,27 +60,15 @@ class DataGenerator(Sequence):
     def __len__(self):
         return self.length
 
-    def __getitem__(self, idx):
-        words = self.get_words()
+    def __getitem__(self, _):
+        sequences = np.array([self.data[(offset + self.iteration) % self.data_length]
+                             for offset in self.offsets])
         self.iteration += 1
-
-        encoded = self.tokenizer.texts_to_sequences(words)
-        sequences = pad_sequences(encoded, maxlen=self.max_length, padding='pre')
 
         # split into input and output elements
         X, y = sequences[:, :-1], sequences[:, 1:]
         y = to_categorical(y, num_classes=self.vocab_size)
         return X, y
-
-    def get_words(self):
-        return [self.data[(offset + self.iteration) % self.data_length]
-                for offset in self.offsets]
-
-
-def read_lines(path):
-    with open(path, encoding='utf8') as fd:
-        for line in fd:
-            yield line.rstrip()
 
 
 def tokenize(train_path, dev_path, delimiter):
@@ -71,10 +87,6 @@ def select_optimizer(optimizer):
     raise ValueError
 
 
-def calc_data_size(path):
-    return sum([1 for f in open(path, encoding='utf8').read()])
-
-
 def perplexity(y_true, y_pred):
     loss = categorical_crossentropy(y_true, y_pred)
     ppl = K.cast(K.pow(math.e, K.mean(loss, axis=-1)), K.floatx())
@@ -84,9 +96,11 @@ def perplexity(y_true, y_pred):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train RNNLM')
     parser.add_argument('--train_path', type=str,
-                        default='train.tsv', help='Path to the train tsv file')
+                        default='train.tsv', help='Path to the train file')
     parser.add_argument('--dev_path', type=str,
-                        default='dev.tsv', help='Path to the dev set tsv file')
+                        default='dev.tsv', help='Path to the dev set file')
+    parser.add_argument('--test_path', type=str,
+                        default='dev.tsv', help='Path to the test set file')
     parser.add_argument('--out', '-o', default='result',
                         help='Directory to output the result')
     parser.add_argument('--epoch', '-e', type=int, default=3,
@@ -127,22 +141,38 @@ if __name__ == '__main__':
                   metrics=[perplexity])
     model.summary()
 
-    # fit network
-    train_generator = DataGenerator(args.train_path, args.batch, args.length,
-                                    vocab_size, tokenizer)
-    valid_generator = DataGenerator(args.dev_path, args.batch, args.length,
-                                    vocab_size, tokenizer)
+    # load/preprocessing
+    datum = {}
+    for data in ('train', 'dev', 'test'):
+        path = os.path.join(args.out, data)
+        if os.path.exists(path + '.npz'):
+            datum[data] = np.load(path + '.npz')['x']
+        else:
+            data_path = [x for x in (args.train_path, args.dev_path, args.test_path) if data in x][0]
+            datum[data] = convert(data_path, args.delimiter, args.batch, tokenizer, args.length, path)
 
-    train_data_size = calc_data_size(args.train_path)
-    dev_data_size = calc_data_size(args.dev_path)
+
+    # fit network
+    train_generator = DataGenerator(datum['train'], args.batch, args.length,
+                                    vocab_size, tokenizer)
+    valid_generator = DataGenerator(datum['dev'], args.batch, args.length,
+                                    vocab_size, tokenizer)
 
     model.fit_generator(generator=train_generator,
                         validation_data=valid_generator,
-                        steps_per_epoch=int(np.ceil(train_data_size / args.batch)),
-                        validation_steps=int(np.ceil(dev_data_size / args.batch)),
+                        steps_per_epoch=int(np.ceil(datum['train'].shape[0] / args.batch)),
+                        validation_steps=int(np.ceil(datum['dev'].shape[0] / args.batch)),
                         epochs=args.epoch,
                         use_multiprocessing=False, verbose=1)
 
-    # Save model to file
+    # Test the model
+    test_generator = DataGenerator(datum['test'], args.batch, args.length,
+                                   vocab_size, tokenizer)
+    results = model.evaluate_generator(generator=test_generator,
+                                       steps=int(np.ceil(datum['test'].shape[0] / args.batch)))
+    print('loss: %s' % results[0])
+    print('perplexity: %s' % results[1])
+
+    # Save the model to files
     open(os.path.join(args.out, 'rnnlm.yaml'), 'w').write(model.to_yaml())
     model.save_weights(os.path.join(args.out, 'rnnlm.hdf5'))
